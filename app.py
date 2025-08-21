@@ -1,5 +1,6 @@
 import os
-from flask import Flask
+from flask import Flask,render_template_string
+from google.cloud import bigquery
 
 app = Flask(__name__)
 
