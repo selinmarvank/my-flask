@@ -17,37 +17,79 @@ def test():
 def index():
     client = bigquery.Client()
 
-    # Replace with your table
     query = """
-        SELECT AgeGroup, TotalCustomers, TotalRevenue,Gender
+        SELECT AgeGroup, TotalCustomers, TotalRevenue, Gender
         FROM `acoustic-apex-469415-m0.DAG.age_summary_gender`
         LIMIT 10
     """
     query_job = client.query(query)
     results = query_job.result()
 
-    # Convert to list of dicts
     rows = [dict(row) for row in results]
 
-    # Simple HTML template
+    # Prepare JSON data for JS
+    chart_data = {
+        "labels": [row["AgeGroup"] for row in rows],
+        "customers": [row["TotalCustomers"] for row in rows],
+        "revenue": [row["TotalRevenue"] for row in rows],
+        "gender": [row["Gender"] for row in rows],
+    }
+
     template = """
-    <h1>BigQuery Results</h1>
-    <table border="1" cellpadding="5">
-        <tr>
-            {% for col in rows[0].keys() %}
-                <th>{{ col }}</th>
-            {% endfor %}
-        </tr>
-        {% for row in rows %}
-            <tr>
-                {% for val in row.values() %}
-                    <td>{{ val }}</td>
-                {% endfor %}
-            </tr>
-        {% endfor %}
-    </table>
+    <html>
+    <head>
+        <title>BigQuery Chart</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    </head>
+    <body>
+        <h1>BigQuery Analysis</h1>
+        <canvas id="myChart" width="600" height="400"></canvas>
+
+        <script>
+            const data = {{ chart_data | safe }};
+
+            const ctx = document.getElementById('myChart').getContext('2d');
+            const myChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [
+                        {
+                            label: 'Total Customers',
+                            data: data.customers,
+                            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                        },
+                        {
+                            label: 'Total Revenue',
+                            data: data.revenue,
+                            backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                afterBody: (tooltipItems) => {
+                                    const idx = tooltipItems[0].dataIndex;
+                                    return "Gender: " + data.gender[idx];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { title: { display: true, text: 'Age Group' } },
+                        y: { title: { display: true, text: 'Values' } }
+                    }
+                }
+            });
+        </script>
+    </body>
+    </html>
     """
-    return render_template_string(template, rows=rows)
+    return render_template_string(template, chart_data=json.dumps(chart_data))
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
